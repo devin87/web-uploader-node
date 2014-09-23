@@ -1,0 +1,11 @@
+{
+  "name": "web-uploader-node",
+  "version": "1.0",
+  "description": "web-uploader node ÉÏ´«ÑÝÊ¾.",
+  "main": "app.js",
+  "repository": "",
+  "author": "Devin <devin87@qq.com>",
+  "dependencies": {
+    "express": "~3.16.0"
+  }
+}

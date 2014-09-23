@@ -1,0 +1,47 @@
+{
+  "name": "mz",
+  "description": "modernize node.js to current ECMAScript standards",
+  "version": "1.0.0",
+  "author": {
+    "name": "Jonathan Ong",
+    "email": "me@jongleberry.com",
+    "url": "http://jongleberry.com"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/normalize/mz"
+  },
+  "devDependencies": {
+    "bluebird": "2",
+    "mocha": "1"
+  },
+  "scripts": {
+    "test": "mocha --reporter spec --bail"
+  },
+  "bugs": {
+    "url": "https://github.com/normalize/mz/issues"
+  },
+  "homepage": "https://github.com/normalize/mz",
+  "_id": "mz@1.0.0",
+  "_shasum": "f9d7e873b8bca8632cafad1ce649c198fe36e952",
+  "_from": "mz@1",
+  "_npmVersion": "1.4.9",
+  "_npmUser": {
+    "name": "jongleberry",
+    "email": "jonathanrichardong@gmail.com"
+  },
+  "maintainers": [
+    {
+      "name": "jongleberry",
+      "email": "jonathanrichardong@gmail.com"
+    }
+  ],
+  "dist": {
+    "shasum": "f9d7e873b8bca8632cafad1ce649c198fe36e952",
+    "tarball": "http://registry.npmjs.org/mz/-/mz-1.0.0.tgz"
+  },
+  "directories": {},
+  "_resolved": "https://registry.npmjs.org/mz/-/mz-1.0.0.tgz",
+  "readme": "ERROR: No README data found!"
+}
