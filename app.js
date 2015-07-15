@@ -7,7 +7,7 @@ var http = require('http'),
     app = express();
 
 app.use(express.static('./www'));
-app.use(express.bodyParser({ uploadDir: './upload', limit: '500mb' }));
+app.use(express.bodyParser({ uploadDir: './upload', limit: '2000mb' }));
 
 app.get('/', function (req, res) {
     res.redirect("/demo/default.html");
@@ -18,7 +18,7 @@ app.post('/upload', function (req, res) {
         var path = f.path,
             fileName = f.name;
 
-        console.log(fileName + " => " + path + "     | " + Q.formatSize(f.size).text);
+        console.log(fileName + " => " + path + "     | " + Q.formatSize(f.size));
     });
 
     var user = req.body["user"],
