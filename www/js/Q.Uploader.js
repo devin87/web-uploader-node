@@ -1,8 +1,9 @@
 ﻿/// <reference path="Q.js" />
 /*
 * Q.Uploader.js 文件上传管理器 1.0
+* https://github.com/devin87/web-uploader
 * author:devin87@qq.com  
-* update:2015/07/15 10:11
+* update:2015/08/27 15:37
 */
 (function (window, undefined) {
     "use strict";
@@ -437,7 +438,7 @@
 
         //添加上传任务,自动判断input(是否多选)或file
         add: function (input_or_file) {
-            var self = this, input, file;
+            var self = this;
 
             if (input_or_file.tagName == "INPUT") {
                 var files = input_or_file.files;
@@ -521,7 +522,6 @@
                 workerIdle = self.workerIdle,
 
                 list = self.list,
-                map = self.map,
                 index = self.index,
 
                 count = list.length;
