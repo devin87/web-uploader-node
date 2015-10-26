@@ -1,12 +1,13 @@
-web-uploader-node
-=================
+web-uploader
+============
 
-js (html5 + html4) 文件上传管理器，支持上传进度显示，支持 IE6+、Firefox、Chrome等 - Node.js示例，[博客园详细介绍](http://www.cnblogs.com/devin87/p/web-uploader.html)
+js (html5 + html4) 文件上传管理器，支持上传进度显示，支持图片预览+缩放，支持 IE6+、Firefox、Chrome等，[博客园详细介绍](http://www.cnblogs.com/devin87/p/web-uploader.html)
 
 ###特点：
 <ul>
 	<li>轻量级，不依赖任何JS库，核心代码（Q.Uploader.js）仅约700行，min版本加起来不到12KB</li>
 	<li>纯JS代码，无需Flash，无需更改后台代码即可实现带进度条（IE10+、其它标准浏览器）的上传，其它（eg：IE6+）自动降级为传统方式上传</li>
+	<li>单独的图片上传UI，支持图片预览（IE6+、其它浏览器）和缩放（IE10+、其它浏览器）</li>
 	<li>上传核心与UI界面分离，可以很方便的定制上传界面包括上传按钮</li>
 	<li>上传文件的同时可以指定上传参数，支持上传类型过滤</li>
 	<li>完善的事件回调，可针对上传的每个过程进行单独处理</li>
@@ -26,7 +27,7 @@ js (html5 + html4) 文件上传管理器，支持上传进度显示，支持 IE6
 源码见[web-uploader](https://github.com/devin87/web-uploader)
 
 ###简单调用示例
-例：使用默认的UI
+例：一般文件上传，使用默认的UI
 ```
 1. 导入样式文件(若自己实现UI接口，则无需导入默认的样式文件)
 <link href="css/uploader.css" rel="stylesheet" type="text/css" />
@@ -36,12 +37,47 @@ js (html5 + html4) 文件上传管理器，支持上传进度显示，支持 IE6
 <script type="text/javascript" src="js/Q.Uploader.js"></script>
 <script type="text/javascript" src="js/Q.Uploader.UI.js"></script>
 
+或
+<script type="text/javascript" src="Q.Uploader.all.js"></script>
+
 3. 调用
 new Q.Uploader({
 	url:"api/upload.ashx",
 
 	target: element,    //上传按钮
 	view: element       //上传任务视图
+});
+```
+
+例：图片上传+预览+缩放
+```
+1. 导入样式文件(若自己实现UI接口，则无需导入默认的样式文件)
+<link href="css/uploader-image.css" rel="stylesheet" type="text/css" />
+
+2. 导入js文件（可自行合并）
+<script type="text/javascript" src="js/Q.js"></script>
+<script type="text/javascript" src="js/Q.Uploader.js"></script>
+<script type="text/javascript" src="js/Q.Uploader.Image.js"></script>
+
+或
+<script type="text/javascript" src="Q.Uploader.image.all.js"></script>
+
+3. 调用
+new Q.Uploader({
+	url:"api/upload.ashx",
+
+	target: element,    //上传按钮
+	view: element,      //上传任务视图
+
+    allows: ".jpg,.png,.gif,.bmp",
+
+    //图片缩放
+    scale: {
+        //要缩放的图片格式
+        types: ".jpg",
+        //最大图片宽度（maxWidth）或高度（maxHeight）
+        maxWidth: 1024
+    }
 });
 ```
 
@@ -113,6 +149,36 @@ on: {
 }
 ```
 
+
+###手动操作(api)
+```
+var uploader = new Q.Uploader(ops);
+
+//添加上传任务，支持文件多选、input元素和文件对象 => input.files | input | file
+uploader.add(input_or_file);
+
+//批量添加上传任务 list => [input_or_file]
+uploader.addList(list);
+
+//手动开始上传（默认自动上传，实例化时可配置 ops.auto=false）
+uploader.start();
+
+//上传一个任务
+uploader.upload(task);
+
+//取消上传任务
+uploader.cancel(taskId);
+
+//移除上传任务，会先调用 uploader.cancel(taskId)
+uploader.remove(taskId);
+
+//更新上传进度
+//total  ： 总上传数据(byte)
+//loaded ： 已上传数据(byte)
+uploader.progress(task, total, loaded);
+
+```
+
 ###自定义UI实现
 可以在初始化时指定UI处理函数，亦可以通过扩展的方式实现
 ```
@@ -136,6 +202,7 @@ Uploader.extend({
             state,      //上传状态
 
 			disabled,   //若为true，表示禁止上传的文件
+			skip,       //若为true，表示要跳过的任务
 
 			//上传后会有如下属性（由于浏览器支持问题，以下部分属性可能不存在）
 			xhr,        //XMLHttpRequest对象（仅 html5）
@@ -144,12 +211,12 @@ Uploader.extend({
 			loaded,     //已上传大小（单位：Byte）
 			speed,      //上传速度（单位：Byte/s）
 
-			avg_speed,  //平均上传速度（仅上传完毕）
+			avgSpeed,   //平均上传速度（仅上传完毕）
 
 			timeStart,  //开始上传的时间
 			timeEnd,    //结束上传的时间（仅上传完毕）
 
-			deleted,    //若为true，表示已删除的文件
+			deleted,     //若为true，表示已删除的文件
 
 			//文件成功上传
 			response,    //服务器返回的字符串
