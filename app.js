@@ -16,7 +16,7 @@ app.get('/', function (req, res) {
 app.post('/upload', function (req, res) {
     Object.forEach(req.files, function (k, f) {
         var path = f.path,
-            fileName = f.name;
+            fileName = req.body["fileName"] || f.name;
 
         console.log(fileName + " => " + path + "     | " + Q.formatSize(f.size));
     });
