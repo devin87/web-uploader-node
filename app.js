@@ -7,7 +7,7 @@ var http = require('http'),
     app = express();
 
 app.use(express.static('./www'));
-app.use(express.bodyParser({ uploadDir: './upload', limit: '2000mb' }));
+app.use(express.bodyParser({ uploadDir: './upload', limit: '4000mb' }));
 
 app.get('/', function (req, res) {
     res.redirect("/demo/default.html");
