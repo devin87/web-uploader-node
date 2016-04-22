@@ -7,7 +7,7 @@ module.exports = {
     copy: {
         title: "同步 web-uploader 内容",
         dir: "../web-uploader",
-        match: ["js/*.js", "css/*.css", "images/*", "demo/*", "dist/**"],
+        match: ["js/*.js", "css/*.css", "images/*", "demo/*", "dist/**", "*.all.js"],
         output: "www"
     },
 
