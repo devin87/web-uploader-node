@@ -1,11 +1,12 @@
 {
-  "name": "web-uploader-node",
-  "version": "1.0",
-  "description": "web-uploader node 上传演示.",
-  "main": "app.js",
-  "repository": "",
-  "author": "Devin <devin87@qq.com>",
-  "dependencies": {
-    "express": "~3.16.0"
-  }
+    "name": "web-uploader-node",
+    "version": "1.1.0",
+    "description": "web-uploader node 上传演示.",
+    "main": "app.js",
+    "repository": "",
+    "author": "Devin <devin87@qq.com>",
+    "dependencies": {
+        "express": "4.x",
+        "formidable": ""
+    }
 }
