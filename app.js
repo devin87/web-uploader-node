@@ -57,9 +57,9 @@ app.all('/upload', function (req, res) {
             path_ok = path + ".ok";
 
         if (action == "query") {
-            if (fs.existsSync(path_ok)) res.send('ok');
-            else if (fs.existsSync(path)) res.send(fs.statSync(path).size + "");
-            else res.send("0");
+            if (fs.existsSync(path_ok)) res.send('ok'); //秒传成功可以返回json对象 eg:{ ret:1, test:"aaa" }
+            else if (fs.existsSync(path)) res.send(fs.statSync(path).size + "");//等同于 { ret:0,start:fs.statSync(path).size }
+            else res.send("0"); //等同于 { ret:0,start:0 }
         } else {
             process_upload_file(req, res, function (form, file, fields) {
                 fs.appendFileSync(path, fs.readFileSync(file.path));
