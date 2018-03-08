@@ -4,7 +4,7 @@
 * Q.Uploader.js 文件上传管理器 1.0
 * https://github.com/devin87/web-uploader
 * author:devin87@qq.com  
-* update:2017/09/22 15:03
+* update:2018/03/08 09:01
 */
 (function (window, undefined) {
     "use strict";
@@ -160,11 +160,14 @@
             allows: "",        //允许上传的文件类型(扩展名),多个之间用逗号隔开
             disallows: "",     //禁止上传的文件类型(扩展名)
 
+            maxSize: 2*1024*1024,   //允许上传的最大文件大小,字节,为0表示不限(仅对支持的浏览器生效,eg: IE10+、Firefox、Chrome)
+
             isSlice: false,               //是否启用分片上传，若为true，则isQueryState和isMd5默认为true
             chunkSize: 2 * 1024 * 1024,   //默认分片大小为2MB
             isQueryState:false,           //是否查询文件状态（for 秒传或续传）
             isMd5: false,                 //是否计算上传文件md5值
             isUploadAfterHash:true,       //是否在Hash计算完毕后再上传
+            sliceRetryCount:2,            //分片上传失败重试次数
 
             container:element, //一般无需指定
             getPos:function,   //一般无需指定
@@ -232,12 +235,14 @@
 
         self.allows = split_to_map(ops.allows);         //允许上传的文件类型（扩展名）,多个之间用逗号隔开 eg:.jpg,.png
         self.disallows = split_to_map(ops.disallows);   //禁止上传的文件类型（扩展名）,多个之间用逗号隔开
+        self.maxSize = +ops.maxSize || 0;
 
         self.chunkSize = ops.chunkSize || 2 * 1024 * 1024;            //分片上传大小
         self.isSlice = !!ops.isSlice;                                 //是否启用分片上传
         self.isQueryState = !!def(ops.isQueryState, self.isSlice);    //是否查询文件状态（for 秒传或续传）
         self.isMd5 = !!def(ops.isMd5, self.isSlice);                  //是否计算上传文件md5值
         self.isUploadAfterHash = ops.isUploadAfterHash !== false;     //是否在Hash计算完毕后再上传
+        self.sliceRetryCount = ops.sliceRetryCount == undefined ? 2 : +ops.sliceRetryCount || 0; //分片上传失败重试次数
 
         //ie9及以下不支持click触发(即使能弹出文件选择框,也无法获取文件数据,报拒绝访问错误)
         //若上传按钮位置不确定(比如在滚动区域内),则无法触发文件选择
@@ -434,9 +439,11 @@
             }
 
             var self = this,
-
                 ext = get_last_find(name, ".").toLowerCase(),
-                isSkip = (self.disallows && self.disallows[ext]) || (self.allows && !self.allows[ext]);
+                limit_type;
+
+            if ((self.disallows && self.disallows[ext]) || (self.allows && !self.allows[ext])) limit_type = "ext";
+            else if (size != -1 && self.maxSize && size > self.maxSize) limit_type = "size";
 
             var task = {
                 id: ++UPLOAD_TASK_GUID,
@@ -448,13 +455,16 @@
                 input: input,
                 file: file,
 
-                state: isSkip ? UPLOAD_STATE_SKIP : UPLOAD_STATE_READY
+                state: limit_type ? UPLOAD_STATE_SKIP : UPLOAD_STATE_READY
             };
 
-            if (isSkip) task.disabled = true;
+            if (limit_type) {
+                task.limited = limit_type;
+                task.disabled = true;
+            }
 
             self.fire("add", task, function (result) {
-                if (result === false || task.disabled) return;
+                if (result === false || task.disabled || task.limited) return;
 
                 task.index = self.list.length;
                 self.list.push(task);
