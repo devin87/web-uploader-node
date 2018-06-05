@@ -43,6 +43,13 @@ function finish_upload(req, res, fields) {
 }
 
 app.all('/upload', function (req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  if (req.method == 'OPTIONS') {
+    res.send('1');
+    return;
+  }
+  
   var action = req.query["action"],
     hash = req.query["hash"];
 
