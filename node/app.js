@@ -8,7 +8,13 @@ var fs = require('fs'),
   Q = require('./lib/Q.js'),
   app = express();
 
-app.use(express.static('./www'));
+var NODE_DIR = __dirname,
+  WWW_DIR = path.join(NODE_DIR, '../www'),
+  UPLOAD_DIR = path.join(NODE_DIR, '../upload');
+
+if (fs.existsSync(WWW_DIR)) app.use(express.static(WWW_DIR));
+
+Q.mkdir(UPLOAD_DIR);
 
 app.get('/', function (req, res) {
   res.redirect("/demo/default.html");
@@ -17,8 +23,8 @@ app.get('/', function (req, res) {
 function process_upload_file(req, res, callback) {
   var form = new formidable.IncomingForm();
 
-  form.uploadDir = "upload";
-  form.maxFieldsSize = 2 * 1024 * 1024 * 1024;  //2G
+  form.uploadDir = UPLOAD_DIR;
+  form.maxFieldsSize = 4 * 1024 * 1024 * 1024;  //2G
 
   form.parse(req, function (err, fields, files) {
     var upfile;
@@ -49,24 +55,25 @@ app.all('/upload', function (req, res) {
     res.send('1');
     return;
   }
-  
+
   var action = req.query["action"],
     hash = req.query["hash"];
 
   if (!hash) {
     process_upload_file(req, res, function (form, file, fields) {
-      var fileName = fields["fileName"],
-        savePath = form.uploadDir + "/" + (fileName || file.name),
+      var fileName = fields["fileName"] || file.name,
+        savePath = path.join(UPLOAD_DIR, fileName),
         dir = path.dirname(savePath);
 
       if (dir && dir != '.') Q.mkdir(dir);
 
       fs.renameSync(file.path, savePath);
+      console.log('Upload: ' + fileName + '  =>  ' + Q.formatSize(file.size));
 
       finish_upload(req, res, fields);
     });
   } else {
-    var path_tmp = "upload/" + hash,
+    var path_tmp = path.join(UPLOAD_DIR, hash),
       path_ok = path_tmp + ".ok";
 
     if (action == "query") {
@@ -82,7 +89,10 @@ app.all('/upload', function (req, res) {
         if (!isOk) {
           res.send(fields["retry"] == "1" ? "0" : "1");
         } else {
+          var fileName = fields["fileName"] || file.name;
           fs.renameSync(path_tmp, path_ok);
+          console.log('Upload: ' + fileName + '  =>  ' + Q.formatSize(fs.statSync(path_ok).size));
+
           finish_upload(req, res, fields);
         }
       });

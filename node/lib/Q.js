@@ -1,8 +1,8 @@
-﻿/*
+/*
 * Q.js (包括 通用方法、原生对象扩展 等) for browser or Node.js
 * https://github.com/devin87/Q.js
 * author:devin87@qq.com  
-* update:2018/02/01 11:21
+* update:2019/11/29 18:37
 */
 (function (undefined) {
     "use strict";
@@ -16,21 +16,25 @@
         slice = Array.prototype.slice;
 
     //严格模式与window识别检测
-    function detect_strict_mode() {
-        var f = function (arg) {
-            arguments[0] = 1;
+    //2018/10/10: uglify压缩会导致此检测函数失效
+    //function detect_strict_mode() {
+    //    var f = function (arg) {
+    //        arguments[0] = 1;
 
-            return arg != arguments[0];
-        };
+    //        return arg != arguments[0];
+    //    };
 
-        return f(0);
-    }
+    //    return f(0);
+    //}
 
-    //是否严格模式
-    var is_strict_mode = detect_strict_mode(),
+    //默认严格模式,不再通过检测判断
+    var is_strict_mode = true, //detect_strict_mode(),
         is_window_mode = GLOBAL == GLOBAL.window;
 
-    //返回对象的类型(小写)
+    /**
+     * 获取数据类型(小写) undefined|null|string|number|array|function|date|regexp|window|node|list
+     * @param {object} obj 要检测的数据
+     */
     function getType(obj) {
         if (obj == undefined) return "" + obj;
 
@@ -44,7 +48,7 @@
             if (typeof obj.length === "number") {
                 //严格模式禁止使用 arguments.callee,调用会报错
                 //IE9+等使用 toString.call 会返回 [object Arguments],此为兼容低版本IE
-                if (!is_strict_mode && obj.callee) return "arguments";
+                //if (!is_strict_mode && obj.callee) return "arguments";
 
                 //IE9+等使用 toString.call 会返回 [object Window],此为兼容低版本IE
                 if (obj == obj.window) return "window";
@@ -60,7 +64,10 @@
         return toString.call(obj).slice(8, -1).toLowerCase();
     }
 
-    //检测是否为函数
+    /**
+     * 检测是否为函数
+     * @param {object} fn 要检测的数据
+     */
     function isFunc(fn) {
         //在IE11兼容模式（ie6-8）下存在bug,当调用次数过多时可能返回不正确的结果
         //return typeof fn == "function";
@@ -68,7 +75,10 @@
         return toString.call(fn) === "[object Function]";
     }
 
-    //检测是否为对象
+    /**
+     * 检测是否为对象
+     * @param {object} obj 要检测的数据
+     */
     function isObject(obj) {
         //typeof null => object
         //toString.call(null) => [object Object]
@@ -76,26 +86,42 @@
         return obj && toString.call(obj) === "[object Object]";
     }
 
-    //检测是否为数组
+    /**
+     * 检测是否为数组
+     * @param {object} obj 要检测的数据
+     */
     function isArray(obj) {
         return toString.call(obj) === "[object Array]";
     }
 
-    //检测是否为数组或类数组
+    /**
+     * 检测是否为数组或类数组
+     * @param {object} obj 要检测的数据
+     */
     function isArrayLike(obj) {
         var type = getType(obj);
 
         return type == "array" || type == "list" || type == "arguments";
     }
 
-    //若value不为undefine,则返回value;否则返回defValue
+    /**
+     * 若value不为undefine,则返回value;否则返回defValue
+     * @param {object} value 
+     * @param {object} defValue value不存在时返回的值
+     */
     function def(value, defValue) {
         return value !== undefined ? value : defValue;
     }
 
-    //检测是否为数字
+    /**
+     * 检测是否是符合条件的数字(n必须为数字类型)
+     * @param {number} n 数字
+     * @param {number|undefined} min 允许的最小值
+     * @param {number|undefined} max 允许的最大值
+     * @param {number|undefined} max_decimal_len 最大小数位数
+     */
     function isNum(n, min, max, max_decimal_len) {
-        if (typeof n != "number") return false;
+        if (typeof n != "number" || isNaN(n)) return false;
 
         if (min != undefined && n < min) return false;
         if (max != undefined && n > max) return false;
@@ -108,42 +134,86 @@
         return true;
     }
 
-    //检测是否为大于0的数字
+    /**
+     * 检测是否为大于0的数字(n必须为数字类型)
+     * @param {number} n 数字
+     */
     function isUNum(n) {
-        return typeof n == "number" && n > 0;
+        return !isNaN(n) && n > 0;
     }
 
-    //检测是否为整数
+    /**
+     * 检测是否为整数(n必须为数字类型)
+     * @param {number} n 数字
+     * @param {number|undefined} min 允许的最小值
+     * @param {number|undefined} max 允许的最大值
+     */
     function isInt(n, min, max) {
         return isNum(n, min, max) && n === Math.floor(n);
     }
 
-    //检测是否为大于0的整数
+    /**
+     * 检测是否为大于0的整数
+     * @param {number} n 数字
+     */
     function isUInt(n) {
         return isInt(n, 1);
     }
 
-    //判断字符串是否是符合条件的数字
+    /**
+     * 判断是否是符合条件的数字
+     * @param {string|number} str 要检测的字符串或数字
+     * @param {number|undefined} min 允许的最小值
+     * @param {number|undefined} max 允许的最大值
+     * @param {number|undefined} max_decimal_len 最大小数位数
+     */
     function checkNum(str, min, max, max_decimal_len) {
-        return str != null && str != "" && !isNaN(str) && isNum(+str, min, max, max_decimal_len);
+        if (typeof str == "number") return isNum(str, min, max, max_decimal_len);
+        if (typeof str == "string") {
+            str = str.trim();
+            return str && isNum(+str, min, max, max_decimal_len);
+        }
+        return false;
     }
 
-    //判断字符串是否是符合条件的整数
+    /**
+     * 判断是否是符合条件的整数
+     * @param {string|number} str 要检测的字符串或数字
+     * @param {number|undefined} min 允许的最小值
+     * @param {number|undefined} max 允许的最大值
+     */
     function checkInt(str, min, max) {
-        return str != null && str != "" && !isNaN(str) && isInt(+str, min, max);
+        if (typeof str == "number") return isInt(str, min, max);
+        if (typeof str == "string") {
+            str = str.trim();
+            return str && isInt(+str, min, max);
+        }
+        return false;
     }
 
-    //将字符串转为大写,若str不是字符串,则返回defValue
+    /**
+     * 将字符串转为大写,若str不是字符串,则返回defValue
+     * @param {string} str 字符串
+     * @param {string} defValue str不是字符串时返回的值
+     */
     function toUpper(str, defValue) {
         return typeof str == "string" ? str.toUpperCase() : defValue;
     }
 
-    //将字符串转为小写,若str不是字符串,则返回defValue
+    /**
+     * 将字符串转为小写,若str不是字符串,则返回defValue
+     * @param {string} str 字符串
+     * @param {string} defValue str不是字符串时返回的值
+     */
     function toLower(str, defValue) {
         return typeof str == "string" ? str.toLowerCase() : defValue;
     }
 
-    //转为数组
+    /**
+     * 转为数组
+     * @param {Array|NodeList} obj 数组或类数组
+     * @param {number} from 开始索引,默认为0
+     */
     function toArray(obj, from) {
         var tmp = [];
 
@@ -167,7 +237,11 @@
         }
     })();
 
-    //将类数组对象转为数组,若对象不存在,则返回空数组
+    /**
+     * 将类数组对象转为数组,若对象不存在,则返回空数组
+     * @param {Array|arguments|NodeList} obj 数组或类数组
+     * @param {number} from 开始索引,默认为0
+     */
     function makeArray(obj, from) {
         if (obj == undefined) return [];
 
@@ -180,11 +254,13 @@
         return [obj];
     }
 
-    //按条件产生数组 arr(5,2,2) => [2,4,6,8,10]
-    //eg:按1-10项产生斐波那契数列 =>arr(10, function (value, i, list) { return i > 1 ? list[i - 1] + list[i - 2] : 1; })
-    //length:数组长度
-    //value:数组项的初始值
-    //step:递增值或处理函数(当前值,索引,当前产生的数组)
+    /**
+     * 按条件产生数组 arr(5,2,2) => [2,4,6,8,10]
+     * eg:按1-10项产生斐波那契数列 =>arr(10, function (value, i, list) { return i > 1 ? list[i - 1] + list[i - 2] : 1; })
+     * @param {number} length 要产生的数组长度
+     * @param {number} value 数组项的初始值
+     * @param {number} step 递增值或处理函数(当前值,索引,当前产生的数组)
+     */
     function arr(length, value, step) {
         if (isFunc(value)) {
             step = value;
@@ -212,10 +288,14 @@
         return list;
     }
 
-    //根据指定的键或索引抽取数组项的值
-    //eg:vals([{id:1},{id:2}], "id")  =>  [1,2]
-    //eg:vals([[1,"a"],[2,"b"]], 1)   =>  ["a","b"]
-    //skipUndefined:是否跳过值不存在的项,默认为true
+    /**
+     * 根据指定的键或索引抽取数组项的值
+     * eg:vals([{id:1},{id:2}], "id")  =>  [1,2]
+     * eg:vals([[1,"a"],[2,"b"]], 1)   =>  ["a","b"]
+     * @param {Array} list 对象数组
+     * @param {string} prop 要抽取的属性
+     * @param {boolean} skipUndefined 是否跳过值不存在的项,默认为true
+     */
     function vals(list, prop, skipUndefined) {
         if (!list) return [];
 
@@ -228,13 +308,22 @@
 
         for (; i < len; i++) {
             item = list[i];
-            if ((item && item[prop] != undefined) || !skipUndefined) tmp.push(item[prop]);
+            if (item && item[prop] != undefined) {
+                tmp.push(item[prop]);
+            } else if (!skipUndefined) {
+                tmp.push(undefined);
+            }
         }
 
         return tmp;
     }
 
-    //prototype 别名 eg:alias(Array,"forEach","each");
+    /**
+     * 给原型方法或属性添加别名 eg:alias(Array,"forEach","each");
+     * @param {object} obj 对象
+     * @param {string|object} name 属性名称或对象 eg: 'forEach' | {forEach:'each'}
+     * @param {string} aliasName 别名
+     */
     function alias(obj, name, aliasName) {
         if (!obj || !obj.prototype) return;
 
@@ -251,20 +340,27 @@
         return obj;
     }
 
-    //扩展对象
-    //forced:是否强制扩展
-    function extend(destination, source, forced) {
-        if (!destination || !source) return destination;
+    /**
+     * 将源对象(source)的所有可枚举且目标对象(target)不存在的属性, 复制到目标对象
+     * @param {object} target 目标对象
+     * @param {object} source 源对象
+     * @param {boolean} forced 是否强制复制, 为true时将会覆盖目标对象同名属性, 默认为false
+     */
+    function extend(target, source, forced) {
+        if (!target || !source) return target;
 
         for (var key in source) {
             if (key == undefined || !has.call(source, key)) continue;
 
-            if (forced || destination[key] === undefined) destination[key] = source[key];
+            if (forced || target[key] === undefined) target[key] = source[key];
         }
-        return destination;
+        return target;
     }
 
-    //数据克隆（for undefined、null、string、number、boolean、array、object）
+    /**
+     * 数据克隆(深拷贝)
+     * @param {object} data 要克隆的对象
+     */
     function clone(data) {
         if (!data) return data;
 
@@ -292,9 +388,12 @@
         return result;
     }
 
-    //将数组或类数组转换为键值对
-    //fv:默认值(fv可为处理函数,该函数返回一个长度为2的数组 eg:[key,value])
-    //ignoreCase:键是否忽略大小写(如果是,则默认小写)
+    /**
+     * 将数组或类数组转换为键值对 eg: ['a','b'] => {a:0,b:1}
+     * @param {Array} list 要转换的数组
+     * @param {object|function} fv 默认值或处理函数(value,i) => [key,value]
+     * @param {boolean} ignoreCase 是否忽略大小写, 为true时将统一使用小写, 默认为false
+     */
     function toMap(list, fv, ignoreCase) {
         if (!list) return;
 
@@ -322,9 +421,12 @@
         return map;
     }
 
-    //将对象数组转换为键值对
-    //propKey:对象中作为键的属性
-    //propValue:对象中作为值的属性,若为空,则值为对象本身;若为true,则给对象添加index属性,值为对象在数组中的索引
+    /**
+     * 将对象数组转换为键值对 eg: [{name:'a',value:1},{name:'b',value:2}] => {a:1,b:2}
+     * @param {Array.<object>} list 要转换的对象数组
+     * @param {string} propKey 对象中作为键的属性 eg: name
+     * @param {string|boolean} propValue 对象中作为值的属性, 为true时将给对象增加index属性, 为空时将整个对象作为值
+     */
     function toObjectMap(list, propKey, propValue) {
         if (!list) return;
 
@@ -347,19 +449,68 @@
         return map;
     }
 
-    //按字符串排序
+    /**
+     * 将目标对象中和源对象值不同的数据作为键值对返回
+     * @param {object} target 目标对象
+     * @param {object} source 源对象
+     * @param {Array.<string>} skipProps 要忽略比较的属性数组
+     * @param {string} skipPrefix 要忽略的属性前缀
+     */
+    function getChangedData(target, source, skipProps, skipPrefix) {
+        if (!target) return undefined;
+
+        var map_skip_prop = skipProps ? toMap(skipProps, true) : {},
+            data_changed = {},
+            has_changed = false;
+
+        for (var key in target) {
+            if (!key || !has.call(target, key) || map_skip_prop[key] || (skipPrefix && key.indexOf(skipPrefix) == 0) || target[key] == source[key]) continue;
+            data_changed[key] = target[key];
+            has_changed = true;
+        }
+
+        return has_changed ? data_changed : undefined;
+    }
+
+    /**
+     * 转为字符串(用于排序)
+     * undefined|null  => ""
+     * true|false      => "true" | "false"
+     * 0               => "0"
+     * @param {object} v 
+     */
+    function to_string(v) {
+        return v == undefined ? "" : v + "";
+    }
+
+    /**
+     * 将对象数组按字符串排序
+     * @param {Array.<object>} list 对象数组 eg: [{k:'a'},{k:'b'}]
+     * @param {string} prop 用于排序的属性
+     * @param {boolean} desc 是否倒序,默认为false
+     */
     function sortString(list, prop, desc) {
-        if (desc) list.sort(function (a, b) { return -(a[prop] || "").localeCompare(b[prop] || ""); });
-        else list.sort(function (a, b) { return (a[prop] || "").localeCompare(b[prop] || ""); });
+        if (desc) list.sort(function (a, b) { return -to_string(a[prop]).localeCompare(to_string(b[prop])); });
+        else list.sort(function (a, b) { return to_string(a[prop]).localeCompare(to_string(b[prop])); });
     }
 
-    //按数字排序
+    /**
+     * 将对象数组按数字排序
+     * @param {Array.<object>} list 对象数组 eg: [{k:10},{k:20}]
+     * @param {string} prop 用于排序的属性
+     * @param {boolean} desc 是否倒序,默认为false
+     */
     function sortNumber(list, prop, desc) {
-        if (desc) list.sort(function (a, b) { return b[prop] - a[prop]; });
-        else list.sort(function (a, b) { return a[prop] - b[prop]; });
+        if (desc) list.sort(function (a, b) { return (+b[prop] || 0) - (+a[prop] || 0); });
+        else list.sort(function (a, b) { return (+a[prop] || 0) - (+b[prop] || 0); });
     }
 
-    //按日期排序
+    /**
+     * 将对象数组按字符串排序
+     * @param {Array.<object>} list 对象数组 eg: [{k:'2019/09/18 13:20'},{k:'2019/10/18 13:20'}]
+     * @param {string} prop 用于排序的属性
+     * @param {boolean} desc 是否倒序,默认为false
+     */
     function sortDate(list, prop, desc) {
         list.sort(function (a, b) {
             var v1 = a[prop], v2 = b[prop];
@@ -375,20 +526,22 @@
         });
     }
 
-    var list_pow = [256 * 256 * 256, 256 * 256, 256, 0];
-
-    //IP转数字（用于排序）
+    /**
+     * 将IP转为数字(用于排序)
+     * @param {string} ip 
+     */
     function ip2int(ip) {
-        var ips = ip.split('.'), len = ips.length, i = 0, n = 0;
-        while (i < len) {
-            n += list_pow[i] + ips[i];
-            i++;
-        }
+        var ips = ip.split('.');
 
-        return n || 0;
+        return (+ips[0] || 0) * 256 * 256 * 256 + (+ips[1] || 0) * 256 * 256 + (+ips[2] || 0) * 256 + (+ips[3] || 0);
     }
 
-    //按IP排序
+    /**
+     * 将对象数组按IP排序
+     * @param {Array.<object>} list 对象数组 eg: [{k:'192.168.2.10'},{k:'192.168.3.1'}]
+     * @param {string} prop 用于排序的属性
+     * @param {boolean} desc 是否倒序,默认为false
+     */
     function sortIP(list, prop, desc) {
         list.sort(function (a, b) {
             var v1 = a[prop] || "", v2 = b[prop] || "";
@@ -400,8 +553,13 @@
         });
     }
 
-    //对象数组排序
-    //type:排序类型 0:字符串排序|1:数字排序|2:日期排序|3:IP排序
+    /**
+     * 对象数组排序
+     * @param {Array.<object>} list 对象数组
+     * @param {number} type 排序类型 0:字符串排序|1:数字排序|2:日期排序|3:IP排序
+     * @param {string} prop 用于排序的属性
+     * @param {boolean} desc 是否倒序,默认为false
+     */
     function sortList(list, type, prop, desc) {
         switch (type) {
             case 1: sortNumber(list, prop, desc); break;
@@ -411,7 +569,11 @@
         }
     }
 
-    //返回一个绑定到指定作用域的新函数
+    /**
+     * 返回一个绑定到指定作用域的新函数
+     * @param {function} fn 
+     * @param {object} bind 要绑定的作用域
+     */
     function proxy(fn, bind) {
         if (isObject(fn)) {
             var name = bind;
@@ -424,13 +586,22 @@
         }
     }
 
-    //触发指定函数,如果函数不存在,则不触发 eg:fire(fn,this,arg1,arg2)
+    /**
+     * 触发指定函数,如果函数不存在,则不触发 eg:fire(fn,this,arg1,arg2)
+     * @param {function} fn 
+     * @param {object} bind 要绑定的作用域
+     */
     function fire(fn, bind) {
         if (fn != undefined) return fn.apply(bind, slice.call(arguments, 2));
     }
 
-    //延迟执行,若fn未定义,则忽略 eg:delay(fn,this,10,[arg1,arg2])
-    //注意:若传入args,则args必须为数组
+    /**
+     * 函数延迟执行,若fn未定义,则忽略 eg:delay(fn,this,10,[arg1,arg2])
+     * @param {function} fn 
+     * @param {object} bind 要绑定的作用域
+     * @param {number} time 要延迟的毫秒数
+     * @param {Array.<object>} args 传给fn的参数
+     */
     function delay(fn, bind, time, args) {
         if (fn == undefined) return;
 
@@ -440,7 +611,11 @@
         }, def(time, 20));
     }
 
-    //异步执行,相当于setTimeout,但会检查fn是否可用 eg:async(fn,10,arg1,arg2)
+    /**
+     * 异步执行,相当于setTimeout,但会检查fn是否可用 eg:async(fn,10,arg1,arg2)
+     * @param {function} fn 
+     * @param {number} time 要延迟的毫秒数
+     */
     function async(fn, time) {
         return isFunc(fn) && delay(fn, undefined, time, slice.call(arguments, 2));
     }
@@ -463,9 +638,13 @@
         ops.callback(ops, timedout);
     }
 
-    //等待达到条件或超时时,执行一个回调函数 callback(ops,timedout)
-    //timeout:超时时间(单位:ms),默认10000ms
-    //sleep:每次休眠间隔(单位:ms),默认20ms
+    /**
+     * 等待达到条件或超时时,执行一个回调函数 callback(ops,timedout)
+     * @param {function} check 检测函数,若返回true则立即执行回调函数
+     * @param {function} callback 回调函数(ops,timedout)
+     * @param {number} timeout 超时时间(单位:ms),默认10000ms
+     * @param {number} sleep 休眠间隔(单位:ms),默认20ms
+     */
     function waitFor(check, callback, timeout, sleep) {
         _waitFor({
             check: check,
@@ -476,17 +655,67 @@
             count: 0,
             startTime: +new Date
         });
-    };
+    }
 
-    //遍历数组或类数组
-    //与浏览器实现保持一致(忽略未初始化的项,注意:ie8及以下会忽略数组中 undefined 项)
+    /**
+     * 遍历数组或类数组,与浏览器实现保持一致(忽略未初始化的项,注意:ie8及以下会忽略数组中 undefined 项)
+     * @param {Array} list 
+     * @param {function} fn 处理函数(value,i,list)
+     * @param {object} bind fn绑定的作用域对象
+     */
     function each_array(list, fn, bind) {
         for (var i = 0, len = list.length; i < len; i++) {
             if (i in list) fn.call(bind, list[i], i, list);
         }
     }
 
-    //简单通用工厂
+    /**
+     * 函数节流,返回一个在指定时间内最多执行一次的函数,第一次或超过指定时间则立即执行函数
+     * @param {number} time 指定时间(单位:ms)
+     * @param {function} fn 处理函数(arg1,arg2)
+     * @param {object} bind fn绑定的作用域对象
+     */
+    function throttle(time, fn, bind) {
+        var last_exec_time, timer;
+
+        var exec = function (args) {
+            last_exec_time = Date.now();
+            if (timer) {
+                clearTimeout(timer);
+                timer = undefined;
+            }
+            fn.apply(bind, args);
+        };
+
+        return function () {
+            if (!last_exec_time || Date.now() - last_exec_time > time) return exec(arguments);
+            if (!timer) timer = setTimeout(function () { exec(arguments); }, time);
+        };
+    }
+
+    /**
+     * 函数防抖,返回一个延迟指定时间且仅执行最后一次触发的函数
+     * @param {number} time 指定时间(单位:ms)
+     * @param {function} fn 处理函数(arg1,arg2)
+     * @param {object} bind fn绑定的作用域对象
+     */
+    function debounce(time, fn, bind) {
+        var timer;
+        return function () {
+            if (timer) clearTimeout(timer);
+
+            var args = arguments;
+            timer = setTimeout(function () {
+                fn.apply(bind, args);
+            }, time);
+        }
+    }
+
+    /**
+     * 简单通用工厂
+     * @param {function} init 初始化函数
+     * @param {function} Super 超类
+     */
     function factory(init, Super) {
         if (Super && isFunc(Super)) {
             var F = function () { };
@@ -958,6 +1187,8 @@
             if (typeof s == "string") {
                 if (!s) return INVALID_DATE;
 
+                if (!isNaN(s) && s.length > 6) return new Date(+s);
+
                 //将年、月、横线(-)替换为斜线(/),将时、分替换为冒号(:),去掉日、号、秒
                 //var ds = s.replace(/[-\u5e74\u6708]/g, "/").replace(/[\u65f6\u5206\u70b9]/g, ":").replace(/[T\u65e5\u53f7\u79d2]/g, ""), date = new Date(ds);
                 var isUTC = s.slice(s.length - 1) == "Z",
@@ -1014,9 +1245,11 @@
 
     //---------------------- 事件监听器 ----------------------
 
-    //自定义事件监听器
-    //types:自定义事件列表
-    //bind:事件函数绑定的上下文 eg:fn.call(bind)
+    /**
+     * 自定义事件监听器
+     * @param {Array.<string>} types 自定义事件列表
+     * @param {object} bind 事件函数绑定的上下文 eg:fn.call(bind)
+     */
     function Listener(types, bind) {
         var self = this;
 
@@ -1144,7 +1377,10 @@
         RE_MAC = /^[a-fA-F0-9]{2}([:-][a-fA-F0-9]{2}){5}$/,         //验证MAC地址
         RE_HTTP = /^https?:\/\//i;
 
-    //判断字符串是否符合IPv4格式
+    /**
+     * 判断是否为可用IP格式(IPv4)
+     * @param {string} ip eg: 192.168.1.1
+     */
     function isIP(ip) {
         var parts = ip.split("."), length = parts.length;
         if (length != 4) return false;
@@ -1157,34 +1393,52 @@
         return true;
     }
 
-    //是否符合邮箱格式
+    /**
+     * 判断是否为可用邮箱格式
+     * @param {string} str eg: test@my.com
+     */
     function isMail(str) {
         return RE_MAIL.test(str);
     }
 
-    //是否符合电话号码格式 18688889999 | 027-88889999-3912
+    /**
+     * 判断是否符合电话号码格式
+     * @param {string} str eg: 18688889999 | 027-88889999-3912
+     */
     function isPhone(str) {
         return RE_PHONE.test(str);
     }
 
-    //是否符合手机号码格式 18688889999
+    /**
+     * 判断是否符合手机号码格式
+     * @param {string} str eg: 18688889999
+     */
     function isTel(str) {
         return RE_TEL.test(str);
     }
 
-    //是否符合MAC地址格式 00:11:22:33:44:ff
+    /**
+     * 判断是否符合MAC地址格式
+     * @param {string} str eg: 00:11:22:33:44:ff
+     */
     function isMAC(str) {
         return RE_MAC.test(str);
     }
 
-    //是否http路径(以 http:// 或 https:// 开头)
+    /**
+     * 判断是否http路径(以 http:// 或 https:// 开头)
+     * @param {string} url 
+     */
     function isHttpURL(url) {
         return RE_HTTP.test(url);
     }
 
-    //按照进制解析数字的层级 eg:时间转化 -> parseLevel(86400,[60,60,24]) => { value=1, level=3 }
-    //steps:步进,可以是固定的数字(eg:1024),也可以是具有层次关系的数组(eg:[60,60,24])
-    //limit:限制解析的层级,正整数,默认为100
+    /**
+     * 按照进制解析数字的层级 eg:时间转化 -> parseLevel(86400,[60,60,24]) => { value=1, level=3 }
+     * @param {number} size 要解析的数字
+     * @param {number|Array.<number>} steps 步进,可以是固定的数字(eg:1024),也可以是具有层次关系的数组(eg:[60,60,24])
+     * @param {number} limit 限制解析的层级,正整数,默认为100
+     */
     function parseLevel(size, steps, limit) {
         size = +size;
         steps = steps || 1024;
@@ -1209,14 +1463,18 @@
 
     var UNITS_FILE_SIZE = ["B", "KB", "MB", "GB", "TB", "PB", "EB"];
 
-    //格式化数字输出,将数字转为合适的单位输出,默认按照1024层级转为文件单位输出
+    /**
+     * 格式化数字输出,将数字转为合适的单位输出,默认按照1024层级转为文件单位输出
+     * @param {number} size 要解析的数字
+     * @param {object} ops 配置对象 {all:false,steps:1024,limit:100,trim:true,join:'',units:['B','KB','MB','GB'],digit:2,start:0,defValue:'--'}
+     */
     function formatSize(size, ops) {
         ops = ops === true ? { all: true } : ops || {};
 
         if (isNaN(size) || size == undefined || size < 0) {
-            var error = ops.error || "--";
+            var defValue = ops.defValue || "--";
 
-            return ops.all ? { text: error } : error;
+            return ops.all ? { text: defValue } : defValue;
         }
 
         var pl = parseLevel(size, ops.steps, ops.limit),
@@ -1231,10 +1489,12 @@
         return ops.all ? pl : pl.text;
     }
 
-    //编码url参数
     var encode_url_param = encodeURIComponent;
 
-    //解码url参数值 eg:%E6%B5%8B%E8%AF%95 => 测试
+    /**
+     * 解码url参数值 eg:%E6%B5%8B%E8%AF%95 => 测试
+     * @param {string} param 要解码的字符串 eg:%E6%B5%8B%E8%AF%95
+     */
     function decode_url_param(param) {
         try {
             return decodeURIComponent(param);
@@ -1243,7 +1503,10 @@
         }
     }
 
-    //将对象转为查询字符串
+    /**
+     * 将参数对象转为查询字符串 eg: {a:1,b:2} => a=1&b=2
+     * @param {object} obj 参数对象 eg: {a:1,b:2}
+     */
     function to_param_str(obj) {
         if (!obj) return "";
         if (typeof obj == "string") return obj;
@@ -1251,13 +1514,16 @@
         var tmp = [];
 
         Object.forEach(obj, function (k, v) {
-            if (typeof v != "function") tmp.push(encode_url_param(k) + "=" + (v != undefined ? encode_url_param(v) : ""));
+            if (v != undefined && typeof v != "function") tmp.push(encode_url_param(k) + "=" + encode_url_param(v));
         });
 
         return tmp.join("&");
     }
 
-    //连接url和查询字符串(支持传入对象)
+    /**
+     * 连接url和查询字符串(支持传入对象)
+     * @param {string} url URL地址
+     */
     function join_url(url) {
         var params = [], args = arguments;
         for (var i = 1, len = args.length; i < len; i++) {
@@ -1267,11 +1533,11 @@
 
         var index = url.indexOf("#"), hash = "";
         if (index != -1) {
-            hash = url.slice(index);
+            hash = url.slice(index).trim();
             url = url.slice(0, index);
         }
 
-        url = url.replace(/\?&$|\?$|\&$/, '');
+        url = url.trim().replace(/\?&$|\?$|\&$/, '');
 
         var str_params = params.join("&");
         if (str_params) url += (url.contains("?") ? "&" : "?") + str_params;
@@ -1279,11 +1545,19 @@
         return url + hash;
     }
 
-    //解析url参数 eg:url?id=1
+    /**
+     * 解析url参数 eg:url?id=1
+     * @param {string} search 查询字符串 eg: ?id=1
+     */
     function parse_url_params(search) {
         if (!search) return {};
 
-        if (search.charAt(0) == "?") search = search.slice(1);
+        var i = search.indexOf("?");
+        if (i != -1) search = search.slice(i + 1);
+
+        var j = search.indexOf("#");
+        if (j != -1) search = search.slice(0, j);
+
         if (!search) return {};
 
         var list = search.split("&"), map = {};
@@ -1302,7 +1576,10 @@
         return map;
     }
 
-    //编码或解码查询字符串
+    /**
+     * 转换或解析查询字符串
+     * @param {string|object} obj 为string类型时将解析为参数对象，否则将转换为查询字符串
+     */
     function process_url_param(obj) {
         if (obj == undefined) return;
 
@@ -1311,23 +1588,43 @@
 
     var DEF_LOC = GLOBAL.location || { protocol: "", hash: "", pathname: "" };
 
-    //解析URL路径 => {href,protocol,host,hostname,port,pathname,search,hash}
+    /**
+     * 解析URL路径 => {href,origin,protocol,host,hostname,port,pathname,search,hash}
+     * @param {string} url URL地址
+     */
     function parse_url(url) {
         //return new URL(url);
 
-        var m = url.match(/(^[^:]*:)?\/\/([^:]+)(:\d+)?(\/[^?]+)?(\?[^#]*)?(#.*)?$/),
+        var m = url.match(/(^[^:]*:)?\/\/([^:\/]+)(:\d+)?(.*)$/),
             protocol = m[1] || DEF_LOC.protocol,
             hostname = m[2],
             port = (m[3] || "").slice(1),
-            host = hostname + ":" + port,
-            pathname = m[4] || "/",
-            search = m[5] || "",
-            hash = m[6] || "";
+            host = hostname + (port ? ":" + port : ""),
 
-        return { href: protocol + "//" + host + pathname + search + hash, protocol: protocol, host: host, hostname: hostname, port: port, pathname: pathname, search: search, hash: hash };
+            pathname = m[4] || "",
+            search = "",
+            hash = "",
+
+            i = pathname.indexOf("#");
+
+        if (i != -1) {
+            hash = pathname.slice(i);
+            pathname = pathname.slice(0, i);
+        }
+
+        i = pathname.indexOf("?");
+        if (i != -1) {
+            search = pathname.slice(i);
+            pathname = pathname.slice(0, i);
+        }
+
+        return { href: protocol + "//" + host + pathname + search + hash, origin: protocol + "//" + host, protocol: protocol, host: host, hostname: hostname, port: port, pathname: pathname || "/", search: search, hash: hash };
     }
 
-    //解析url hash eg:#net/config!/wan  => {nav:"#net/config",param:"wan"}
+    /**
+     * 解析 URL hash值 eg:#net/config!/wan  => {nav:"#net/config",param:"wan"}
+     * @param {string} hash eg:#net/config!/wan
+     */
     function parse_url_hash(hash) {
         if (!hash) hash = DEF_LOC.hash;
         //可能对后续处理造成影响,比如 param 中有/等转码字符
@@ -1346,8 +1643,11 @@
         return { nav: nav, param: param };
     }
 
-    //获取页名称
-    //keepQueryHash:是否保留查询字符串和Hash字符串
+    /**
+     * 获取当前页名称 eg: /app.html?id=1#aa => app.html
+     * @param {string} path eg: /app.html?id=1#aa
+     * @param {boolean} keepQueryHash 是否保留查询字符串和Hash字符串,默认为false
+     */
     function get_page_name(path, keepQueryHash) {
         var pathname = (path || DEF_LOC.pathname).replace(/\\/g, "/"),
             start = pathname.lastIndexOf("/") + 1;
@@ -1398,6 +1698,9 @@
 
         toMap: toMap,
         toObjectMap: toObjectMap,
+        getChangedData: getChangedData,
+
+        ip2int: ip2int,
 
         sortNumber: sortNumber,
         sortString: sortString,
@@ -1409,6 +1712,9 @@
         delay: delay,
         async: async,
         waitFor: waitFor,
+
+        throttle: throttle,
+        debounce: debounce,
 
         factory: factory,
 
@@ -1443,10 +1749,10 @@
 
 })();
 
-﻿/*
+/*
 * Q.Queue.js 队列 for browser or Node.js
 * author:devin87@qq.com
-* update:2016/03/03 17:54
+* update:2020/01/07 18:48
 */
 (function (undefined) {
     "use strict";
@@ -1472,9 +1778,12 @@
         QUEUE_TASK_OK = 2,           //任务已完成
 
         //自定义事件
-        LIST_CUSTOM_EVENT = ["add", "start", "end", "stop", "complete"];
+        LIST_CUSTOM_EVENT = ["add", "start", "end", "stop", "complete", "limit"];
 
-    //异步队列
+    /**
+     * 异步队列
+     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,inject:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
+     */
     function Queue(ops) {
         ops = ops || {};
 
@@ -1484,9 +1793,13 @@
         //队列自定义事件
         self._listener = new Listener(LIST_CUSTOM_EVENT, self);
 
-        self.auto = ops.auto !== false;
-        self.workerThread = ops.workerThread || 1;
-        self.timeout = ops.timeout;
+        self.count = +ops.count || 10000;               //队列长度,超过后将清理已完成的任务
+        self.limitMode = ops.limitMode || 1;            //队列在超出长度后的限制模式(1:禁止添加|2:清理早期的任务)
+        self.auto = ops.auto !== false;                 //是否自动开始
+        self.workerThread = ops.workerThread || 1;      //工作线程
+        self.timeout = ops.timeout;                     //超时时间(毫秒)
+
+        self.id = 0;
 
         if (ops.rtype == "auto") self.rtype = getType(tasks);
 
@@ -1524,6 +1837,7 @@
 
             self.tasks = [];
             self.index = 0;
+            self.id = 0;
 
             self.workerIdle = self.workerThread;
 
@@ -1532,14 +1846,42 @@
 
         //添加任务
         _add: function (args, key, auto) {
-            var self = this;
+            var self = this,
+                tasks = self.tasks,
+                count = self.count,
+                is_add = true;
 
-            var task = { args: makeArray(args), state: QUEUE_TASK_READY };
+            var task = { id: ++self.id, args: makeArray(args), state: QUEUE_TASK_READY };
+
             if (key != undefined) task.key = key;
 
-            self.tasks.push(task);
+            if (tasks.length >= count) {
+                if (self.index) {
+                    tasks = tasks.slice(self.index);
+                    self.index = 0;
+                }
 
-            self.trigger("add", task);
+                if (tasks.length >= count) {
+                    var is_dropped = self.limitMode == 2, dropped_tasks;
+
+                    if (is_dropped) {
+                        dropped_tasks = tasks.slice(0, tasks.length - count + 1);
+                        tasks = tasks.slice(-count + 1);
+                        self.index = 0;
+                    } else {
+                        is_add = false;
+                    }
+
+                    self.trigger("limit", is_dropped ? dropped_tasks : task);
+                }
+
+                self.tasks = tasks;
+            }
+
+            if (is_add) {
+                tasks.push(task);
+                self.trigger("add", task);
+            }
 
             if (auto) self.start();
 
@@ -1580,7 +1922,7 @@
         _run: function () {
             var self = this;
 
-            if (self.stoped || self.workerIdle <= 0 || self.index >= self.tasks.length) return self;
+            if (self.stopped || self.workerIdle <= 0 || self.index >= self.tasks.length) return self;
 
             var task = self.tasks[self.index++],
                 timeout = self.timeout;
@@ -1608,7 +1950,7 @@
         //启动队列,默认延迟10ms
         start: function () {
             var self = this;
-            self.stoped = false;
+            self.stopped = false;
             if (!self.auto) self.auto = true;
 
             delay(self._run, self, 10);
@@ -1620,7 +1962,7 @@
         //time:可选,暂停的毫秒数
         stop: function (time) {
             var self = this;
-            self.stoped = true;
+            self.stopped = true;
 
             if (isUInt(time)) delay(self.start, self, time);
 
@@ -1635,7 +1977,7 @@
                 injectIndex = ops.injectIndex || 0,     //执行函数中回调函数所在参数索引
                 injectCallback = ops.injectCallback,    //如果该参数是一个对象,需指定参数名称,可选
 
-                args = task.args.slice(0);
+                args = (task.args || []).slice(0);
 
             //自执行函数
             if (!ops.exec && isFunc(args[0])) injectIndex++;
@@ -1686,6 +2028,8 @@
                 args = self.inject(task, callback),
                 fn = args[0];
 
+            if (!fn) return;
+
             if (fn instanceof Queue) fn.start();
             else if (exec) exec.apply(bind, args);
             else fn.apply(bind, args.slice(1));
@@ -1726,7 +2070,7 @@
             //触发任务完成事件
             self.trigger("end", task);
 
-            if (self.stoped) {
+            if (self.stopped) {
                 //任务已停止且完成时触发任务停止事件
                 if (self.isCompleted(self.tasks.slice(0, self.index))) self.trigger("stop", self.processResult(self.tasks));
             } else {
@@ -1751,7 +2095,13 @@
         OK: QUEUE_TASK_OK
     };
 
-    //函数排队执行
+    /**
+     * 函数排队执行
+     * @param {Array} tasks 任务数组
+     * @param {function} complete 队列完成处理函数
+     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,inject:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
+     * @param {number} workerThread 同时执行的任务数量
+     */
     function series(tasks, complete, ops, workerThread) {
         if (isObject(complete)) {
             ops = complete;
@@ -1767,17 +2117,28 @@
         }));
     }
 
-    //函数并行执行
-    function parallel(tasks, complete, ops) {
-        return series(tasks, complete, ops, isArrayLike(tasks) ? tasks.length : Object.size(tasks));
+    /**
+     * 函数并行执行
+     * @param {Array} tasks 任务数组
+     * @param {function} complete 队列完成处理函数
+     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,injectIndex:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
+     * @param {number} workerThread 同时执行的任务数量
+     */
+    function parallel(tasks, complete, ops, workerThread) {
+        return series(tasks, complete, ops, workerThread || (isArrayLike(tasks) ? tasks.length : Object.size(tasks)));
     }
 
-    //ajax队列
+    var jslib = (Q.G || {}).$ || {};
+
+    /**
+     * ajax队列
+     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,injectIndex:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
+     */
     function ajaxQueue(ops) {
         ops = ops || {};
 
         return new Queue(extend(ops, {
-            exec: ops.ajax || Q.ajax || $.ajax,
+            exec: ops.ajax || Q.ajax || Q.http || jslib.ajax,
             injectIndex: 1,
             injectCallback: "complete"
         }));
@@ -1799,36 +2160,28 @@
 /*
 * Q.node.core.js 通用处理
 * author:devin87@qq.com
-* update:2017/07/28 14:11
+* update:2020/07/22 20:47
 */
 (function () {
     var fs = require('fs'),
         path = require('path'),
         crypto = require('crypto'),
 
-        extend = Q.extend,
-        fire = Q.fire,
-        isFunc = Q.isFunc,
-        isObject = Q.isObject;
+        extend = Q.extend;
 
-    //规格化路径
-    function normalize_path(_path) {
-        var pathname = path.normalize(_path);
-        return pathname != "\\" && pathname.endsWith("\\") ? pathname.slice(0, -1) : pathname;
-    }
-
-    //创建目录
     function mkdirSync(url, mode, callback) {
         if (url == "..") return callback && callback();
 
-        url = normalize_path(url);
-        var arr = url.split("\\");
+        url = path.normalize(url).replace(/\\/g, '/');
+        if (url != "/" && url.endsWith("/")) url = url.slice(0, -1);
+
+        var arr = url.split("/");
 
         //处理 ./aaa
         if (arr[0] === ".") arr.shift();
 
         //处理 ../ddd/d
-        if (arr[0] == "..") arr.splice(0, 2, arr[0] + "\\" + arr[1]);
+        if (arr[0] == "..") arr.splice(0, 2, path.join(arr[0], arr[1]));
 
         mode = mode || 493;  //0755
 
@@ -1837,7 +2190,7 @@
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, mode);
 
             if (arr.length) {
-                inner(dir + "\\" + arr.shift());
+                inner(path.join(dir, arr.shift()));
             } else {
                 callback && callback();
             }
@@ -1850,6 +2203,16 @@
     function mkdir(dir) {
         if (!fs.existsSync(dir)) mkdirSync(dir);
     }
+
+    //创建文件夹优先使用 fs-extra 方法
+    try {
+        var fse = require('fs-extra');
+        if (fse) {
+            mkdir = function mkdir(dir) {
+                if (!fs.existsSync(dir)) fse.mkdirsSync(dir);
+            };
+        }
+    } catch (e) { }
 
     /**
      * 计算文本md5值
@@ -1942,7 +2305,7 @@
 /*
 * Q.node.http.js http请求(支持https)
 * author:devin87@qq.com
-* update:2018/03/06 17:41
+* update:2019/08/26 13:46
 */
 (function () {
     var URL = require('url'),
@@ -1964,7 +2327,8 @@
     };
 
     var config = {
-        timeout: 10000
+        timeout: 10000,
+        timeout_download: 600000
     };
 
     /**
@@ -1974,6 +2338,13 @@
     function setup(settings) {
         if (settings.ErrorCode) extend(ErrorCode, settings.ErrorCode, true);
         if (settings.config) extend(config, settings.config, true);
+    }
+
+    //http发送之前
+    function fire_http_beforeSend(req, ops) {
+        ops._begin = Date.now();
+
+        return fire(ops.beforeSend || config.beforeSend, undefined, req, ops);
     }
 
     /**
@@ -1990,8 +2361,13 @@
         if (ops._status.ended) return;
         ops._status.ended = true;
 
+        ops._end = Date.now();
+        ops.time = ops._end - ops._begin;
+
+        if (errCode && err && !isObject(errCode)) errCode = { code: errCode, msg: err.message };
+
         fire(ops.complete, undefined, result, errCode, ops, res, err);
-        fire(config.afterSend, undefined, result, errCode, ops, res, err);
+        fire(ops.afterSend || config.afterSend, undefined, result, errCode, ops, res, err);
 
         if (ops.res) ops.res.end(err ? 'Error: ' + err.message : ops.response);
     }
@@ -2011,13 +2387,13 @@
             return;
         }
 
-        if (isFunc(ops)) ops = { success: ops };
+        if (isFunc(ops)) ops = { complete: ops };
 
         ops.url = url;
 
         var method = ops.type || ops.method || 'GET',
             headers = ops.headers || {},
-            timeout = ops.timeout || config.timeout || {},
+            timeout = ops.timeout || config.timeout,
 
             is_http_post = method == 'POST',
             is_json = ops.dataType == 'JSON',
@@ -2039,7 +2415,7 @@
 
         var uri = URL.parse(url);
 
-        ops.options = {
+        var options = {
             hostname: uri.hostname,
             path: uri.path,
             port: uri.port,
@@ -2047,11 +2423,16 @@
             headers: headers
         };
 
+        if (ops.opts) extend(options, ops.opts);
+        if (ops.agent) options.agent = ops.agent;
+
+        ops.options = options;
+
         var web = url.startsWith('https') ? https : http;
 
-        fire(config.beforeSend, undefined, ops);
+        if (options.agent === true) options.agent = new web.Agent();
 
-        var req = web.request(ops.options, function (res) {
+        var req = web.request(options, function (res) {
             var buffers = [];
 
             var is_http_proxy = Q.def(ops.proxy, ops.res ? true : false),
@@ -2061,7 +2442,7 @@
             if (_res) {
                 if (is_auto_header) {
                     Object.forEach(res.headers, function (k, v) {
-                        if (!res.headers[k] != undefined) _res.setHeader(k, v);
+                        if (res.headers[k] != undefined) _res.setHeader(k, v);
                     });
                 } else {
                     var content_type = res.headers['content-type'] || 'text/html';
@@ -2088,8 +2469,8 @@
 
                 try {
                     data = JSON.parse(text);
-                } catch (e) {
-                    return fire_http_complete(undefined, ErrorCode.JSONError, ops, res);
+                } catch (err) {
+                    return fire_http_complete(undefined, ErrorCode.JSONError, ops, res, err);
                 }
 
                 fire_http_complete(data, undefined, ops, res);
@@ -2098,12 +2479,18 @@
             fire_http_complete(undefined, ErrorCode.HttpError, ops, undefined, err);
         });
 
-        var timeout = ops.timeout || config.timeout;
+        if (fire_http_beforeSend(req, ops) === false) return;
+
         if (timeout && timeout != -1) {
-            req.setTimeout(timeout, function () {
+            // req.setTimeout在某些环境需要双倍时间才触发超时回调
+            // req.setTimeout(timeout, function () {
+            //     req.abort();
+            //     fire_http_complete(undefined, ErrorCode.Timedout, ops);
+            // });
+            setTimeout(function () {
                 req.abort();
                 fire_http_complete(undefined, ErrorCode.Timedout, ops);
-            });
+            }, timeout);
         }
 
         req.write(post_data);
@@ -2124,6 +2511,7 @@
 
         if (isFunc(data)) {
             ops = { complete: data };
+            if (cb && isObject(cb)) extend(ops, cb);
         } else if (isObject(cb)) {
             ops = cb;
             ops.data = data;
@@ -2185,42 +2573,81 @@
      * 下载文件
      * @param {string} url 下载地址
      * @param {string} dest 保存路径
-     * @param {function} cb 回调函数(errCode)
-     * @param {object} ops 其它配置项 {timeout:120000}
+     * @param {function} cb 回调函数(data, errCode)
+     * @param {object} ops 其它配置项 { timeout: 600000, progress: function(total,loaded){} }
      */
     function downloadFile(url, dest, cb, ops) {
         ops = ops || {};
 
-        var web = url.startsWith('https') ? https : http;
+        var method = ops.type || ops.method || 'GET',
+            headers = ops.headers || {},
+            timeout = ops.timeout || config.timeout_download;
 
-        var req = web.get(url, function (res) {
-            if (res.statusCode === 200) {
-                var file = fs.createWriteStream(dest);
-                res.pipe(file);
+        if (config.headers) extend(headers, config.headers);
 
-                file.on('finish', function () {
-                    file.close(function () {
-                        fire(cb, undefined, undefined, undefined, ops, res);
-                    });
+        var uri = URL.parse(url);
+
+        var options = {
+            hostname: uri.hostname,
+            path: uri.path,
+            port: uri.port,
+            headers: headers
+        };
+
+        if (ops.opts) extend(options, ops.opts);
+        if (ops.agent) options.agent = ops.agent;
+
+        ops.options = options;
+
+        var web = url.startsWith('https') ? https : http,
+            total = 0,
+            loaded = 0;
+
+        if (options.agent === true) options.agent = new web.Agent();
+
+        var req = web.get(options, function (res) {
+            if (res.statusCode !== 200) return fire(cb, undefined, undefined, ErrorCode.HttpError, ops, res, 'Http code: ' + res.statusCode);
+
+            var file = fs.createWriteStream(dest);
+            res.pipe(file);
+
+            file.on('finish', function () {
+                file.close(function () {
+                    fire(cb, undefined, undefined, undefined, ops, res);
                 });
+            });
 
-                file.on('error', function (err) {
-                    fs.unlinkSync(dest);
-                    fire(cb, undefined, undefined, ErrorCode.FileError, ops, res, err);
+            file.on('error', function (err) {
+                if (fs.existsSync(dest)) fs.unlinkSync(dest);
+                fire(cb, undefined, undefined, ErrorCode.FileError, ops, res, err);
+            });
+
+            if (ops.progress) {
+                //获取文件长度
+                total = +res.headers['content-length'] || 0;
+                fire(ops.progress, res, total, loaded);
+
+                //下载进度
+                res.on('data', function (chunk) {
+                    loaded += chunk.length;
+                    fire(ops.progress, res, total, loaded);
                 });
             }
         });
 
         req.on('error', function (err) {
-            fs.unlinkSync(dest);
+            if (fs.existsSync(dest)) fs.unlinkSync(dest);
             fire(cb, undefined, undefined, ErrorCode.HttpError, ops, undefined, err);
         });
 
-        var timeout = ops.timeout || 120000;
         if (timeout && timeout != -1) {
-            req.setTimeout(timeout, function () {
+            //req.setTimeout(timeout, function () {
+            //    fire(cb, undefined, undefined, ErrorCode.Timedout, ops);
+            //});
+            setTimeout(function () {
+                //req.abort();
                 fire(cb, undefined, undefined, ErrorCode.Timedout, ops);
-            });
+            }, timeout);
         }
 
         return req;
