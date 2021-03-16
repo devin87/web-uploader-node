@@ -2,14 +2,15 @@
 /*
 * Q.Uploader.slice.js 分片上传
 * author:devin87@qq.com  
-* update:2018/03/23 11:00
+* update:2020/08/25 18:25
 */
 (function (window, undefined) {
     "use strict";
 
-    var blobSlice = File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice,
+    var Uploader = Q.Uploader;
+    if (!Uploader.support.html5) return;
 
-        Uploader = Q.Uploader;
+    var blobSlice = window.File ? File.prototype.slice || File.prototype.mozSlice || File.prototype.webkitSlice : undefined;
 
     Uploader.extend({
         //分片上传+断点续传
@@ -24,6 +25,8 @@
 
             //分片上传
             var upload = function (blob, callback, c) {
+                c = +c || 0;
+
                 var xhr = new XMLHttpRequest(),
                     url = task.url,
                     completed = end == size;
@@ -36,28 +39,24 @@
                     self.progress(task, size, start + e.loaded);
                 }, false);
 
-                //分片上传失败
-                var process_upload_error = function () {
-                    c = +c || 0;
-                    c++;
+                xhr.addEventListener("load", function (e) {
+                    var responseText = e.target.responseText;
+                    if (completed) return self.complete(task, Uploader.COMPLETE, responseText);
 
-                    if (c > retryCount) return self.complete(task, Uploader.ERROR);
+                    //分片上传成功继续上传
+                    if (responseText == 1 || responseText == '"1"') return callback();
+
+                    //服务器返回失败
+                    self.complete(task, Uploader.ERROR, responseText);
+                }, false);
+
+                //分片上传失败
+                xhr.addEventListener("error", function () {
+                    if (++c > retryCount) return self.complete(task, Uploader.ERROR);
 
                     //重新上传
                     upload(blob, callback, c);
-                };
-
-                xhr.addEventListener("load", function (e) {
-                    var text = e.target.responseText;
-                    if (completed) return self.complete(task, Uploader.COMPLETE, text);
-
-                    //分片上传成功继续上传
-                    if (text == 1 || text == '"1"') return callback();
-
-                    process_upload_error();
                 }, false);
-
-                xhr.addEventListener("error", process_upload_error, false);
 
                 var fd = new FormData;
 
@@ -67,13 +66,13 @@
                 });
 
                 fd.append("fileName", task.name);
+                if (task.size != -1) fd.append("fileSize", task.size);
                 fd.append(self.upName, blob, task.name);
                 fd.append("sliceCount", task.sliceCount);
                 fd.append("sliceIndex", task.sliceIndex);
 
                 xhr.open("POST", url);
-
-                //xhr.setRequestHeader("X-Requested-With", "XMLHttpRequest");
+                self._process_xhr_headers(xhr);
 
                 //上传完毕
                 if (completed) {
