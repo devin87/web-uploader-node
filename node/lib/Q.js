@@ -2,7 +2,7 @@
 * Q.js (包括 通用方法、原生对象扩展 等) for browser or Node.js
 * https://github.com/devin87/Q.js
 * author:devin87@qq.com  
-* update:2019/11/29 18:37
+* update:2021/09/24 11:04
 */
 (function (undefined) {
     "use strict";
@@ -72,7 +72,7 @@
         //在IE11兼容模式（ie6-8）下存在bug,当调用次数过多时可能返回不正确的结果
         //return typeof fn == "function";
 
-        return toString.call(fn) === "[object Function]";
+        return toString.call(fn) === "[object Function]" || toString.call(fn) === "[object AsyncFunction]";
     }
 
     /**
@@ -458,6 +458,7 @@
      */
     function getChangedData(target, source, skipProps, skipPrefix) {
         if (!target) return undefined;
+        if (!source) return target;
 
         var map_skip_prop = skipProps ? toMap(skipProps, true) : {},
             data_changed = {},
@@ -672,35 +673,30 @@
     /**
      * 函数节流,返回一个在指定时间内最多执行一次的函数,第一次或超过指定时间则立即执行函数
      * @param {number} time 指定时间(单位:ms)
-     * @param {function} fn 处理函数(arg1,arg2)
+     * @param {function} fn 处理函数(arg1,...)
      * @param {object} bind fn绑定的作用域对象
      */
     function throttle(time, fn, bind) {
-        var last_exec_time, timer;
-
-        var exec = function (args) {
-            last_exec_time = Date.now();
-            if (timer) {
-                clearTimeout(timer);
-                timer = undefined;
-            }
-            fn.apply(bind, args);
-        };
+        var last_exec_time;
 
         return function () {
-            if (!last_exec_time || Date.now() - last_exec_time > time) return exec(arguments);
-            if (!timer) timer = setTimeout(function () { exec(arguments); }, time);
+            var now = Date.now();
+            if (last_exec_time && now - last_exec_time < time) return;
+
+            last_exec_time = now;
+            fn.apply(bind, arguments);
         };
     }
 
     /**
-     * 函数防抖,返回一个延迟指定时间且仅执行最后一次触发的函数
+     * 函数防抖,返回一个延迟指定时间且仅执行最后一次触发的函数,若以小于指定时间的频率一直调用,则函数不会执行
      * @param {number} time 指定时间(单位:ms)
-     * @param {function} fn 处理函数(arg1,arg2)
+     * @param {function} fn 处理函数(arg1,...)
      * @param {object} bind fn绑定的作用域对象
      */
     function debounce(time, fn, bind) {
         var timer;
+
         return function () {
             if (timer) clearTimeout(timer);
 
@@ -897,6 +893,15 @@
         format: function (length, radix) {
             var str = this.toString(radix || 10), fix = length - str.length;
             return (fix > 0 ? "0".repeat(fix) : "") + str;
+        },
+        //数字转为保留指定的小数位数，整数不受影响 eg: (0.2394).maxDecimal(2) => 0.24
+        maxDecimal: function (length) {
+            if (this === Math.floor(this)) return this;
+
+            if (length === 0) return Math.floor(Math.round(this * 100) / 100);
+
+            var fix = Math.pow(10, +length || 8);
+            return Math.round(this * fix) / fix;
         }
     });
 
@@ -1489,13 +1494,13 @@
         return ops.all ? pl : pl.text;
     }
 
-    var encode_url_param = encodeURIComponent;
+    var encodeUrlParam = encodeURIComponent;
 
     /**
      * 解码url参数值 eg:%E6%B5%8B%E8%AF%95 => 测试
      * @param {string} param 要解码的字符串 eg:%E6%B5%8B%E8%AF%95
      */
-    function decode_url_param(param) {
+    function decodeUrlParam(param) {
         try {
             return decodeURIComponent(param);
         } catch (e) {
@@ -1507,14 +1512,14 @@
      * 将参数对象转为查询字符串 eg: {a:1,b:2} => a=1&b=2
      * @param {object} obj 参数对象 eg: {a:1,b:2}
      */
-    function to_param_str(obj) {
+    function joinUrlParams(obj) {
         if (!obj) return "";
         if (typeof obj == "string") return obj;
 
         var tmp = [];
 
         Object.forEach(obj, function (k, v) {
-            if (v != undefined && typeof v != "function") tmp.push(encode_url_param(k) + "=" + encode_url_param(v));
+            if (v != undefined && typeof v != "function") tmp.push(encodeUrlParam(k) + "=" + encodeUrlParam(v));
         });
 
         return tmp.join("&");
@@ -1524,11 +1529,11 @@
      * 连接url和查询字符串(支持传入对象)
      * @param {string} url URL地址
      */
-    function join_url(url) {
+    function joinUrl(url) {
         var params = [], args = arguments;
         for (var i = 1, len = args.length; i < len; i++) {
             var param = args[i];
-            if (param) params.push(to_param_str(param));
+            if (param) params.push(joinUrlParams(param));
         }
 
         var index = url.indexOf("#"), hash = "";
@@ -1549,7 +1554,7 @@
      * 解析url参数 eg:url?id=1
      * @param {string} search 查询字符串 eg: ?id=1
      */
-    function parse_url_params(search) {
+    function parseUrlParams(search) {
         if (!search) return {};
 
         var i = search.indexOf("?");
@@ -1570,7 +1575,7 @@
                 key = kv[0],
                 value = kv[1];
 
-            if (key) map[decode_url_param(key)] = value ? decode_url_param(value) : "";
+            if (key) map[decodeUrlParam(key)] = value ? decodeUrlParam(value) : "";
         }
 
         return map;
@@ -1580,10 +1585,10 @@
      * 转换或解析查询字符串
      * @param {string|object} obj 为string类型时将解析为参数对象，否则将转换为查询字符串
      */
-    function process_url_param(obj) {
+    function processUrlParam(obj) {
         if (obj == undefined) return;
 
-        return typeof obj == "string" ? parse_url_params(obj) : to_param_str(obj);
+        return typeof obj == "string" ? parseUrlParams(obj) : joinUrlParams(obj);
     }
 
     var DEF_LOC = GLOBAL.location || { protocol: "", hash: "", pathname: "" };
@@ -1592,7 +1597,7 @@
      * 解析URL路径 => {href,origin,protocol,host,hostname,port,pathname,search,hash}
      * @param {string} url URL地址
      */
-    function parse_url(url) {
+    function parseUrl(url) {
         //return new URL(url);
 
         var m = url.match(/(^[^:]*:)?\/\/([^:\/]+)(:\d+)?(.*)$/),
@@ -1625,7 +1630,7 @@
      * 解析 URL hash值 eg:#net/config!/wan  => {nav:"#net/config",param:"wan"}
      * @param {string} hash eg:#net/config!/wan
      */
-    function parse_url_hash(hash) {
+    function parseUrlHash(hash) {
         if (!hash) hash = DEF_LOC.hash;
         //可能对后续处理造成影响,比如 param 中有/等转码字符
         //if(hash) hash = decode_url_param(hash);
@@ -1648,7 +1653,7 @@
      * @param {string} path eg: /app.html?id=1#aa
      * @param {boolean} keepQueryHash 是否保留查询字符串和Hash字符串,默认为false
      */
-    function get_page_name(path, keepQueryHash) {
+    function getPageName(path, keepQueryHash) {
         var pathname = (path || DEF_LOC.pathname).replace(/\\/g, "/"),
             start = pathname.lastIndexOf("/") + 1;
 
@@ -1658,6 +1663,18 @@
         if (end == -1) end = pathname.indexOf("#", start);
 
         return end != -1 ? pathname.slice(start, end) : pathname.slice(start);
+    }
+
+    /**
+     * 解析JSON，解析失败时返回undefined
+     * @param {string} text 要解析的JSON字符串
+     */
+    function parseJSON(text) {
+        if (!text || typeof text !== 'string') return text;
+
+        try {
+            return JSON.parse(text);
+        } catch (err) { }
     }
 
     //---------------------- export ----------------------
@@ -1728,14 +1745,16 @@
         parseLevel: parseLevel,
         formatSize: formatSize,
 
-        parseUrlParams: parse_url_params,
-        joinUrlParams: to_param_str,
-        param: process_url_param,
-        join: join_url,
+        parseUrlParams: parseUrlParams,
+        joinUrlParams: joinUrlParams,
+        param: processUrlParam,
+        join: joinUrl,
 
-        parseUrl: parse_url,
-        parseHash: parse_url_hash,
-        getPageName: get_page_name,
+        parseUrl: parseUrl,
+        parseHash: parseUrlHash,
+        getPageName: getPageName,
+
+        parseJSON: parseJSON,
 
         Listener: Listener,
         SE: SE
@@ -1752,7 +1771,7 @@
 /*
 * Q.Queue.js 队列 for browser or Node.js
 * author:devin87@qq.com
-* update:2020/01/07 18:48
+* update:2021/06/23 12:53
 */
 (function (undefined) {
     "use strict";
@@ -1782,7 +1801,7 @@
 
     /**
      * 异步队列
-     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,inject:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
+     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,injectIndex:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
      */
     function Queue(ops) {
         ops = ops || {};
@@ -2025,14 +2044,15 @@
                 exec = ops.exec,    //执行函数
                 bind = ops.bind,    //执行函数绑定的上下文,可选
 
-                args = self.inject(task, callback),
-                fn = args[0];
+                args = self.inject(task, callback);
 
+            if (exec) return exec.apply(bind, args);
+
+            var fn = args[0];
             if (!fn) return;
 
             if (fn instanceof Queue) fn.start();
-            else if (exec) exec.apply(bind, args);
-            else fn.apply(bind, args.slice(1));
+            else if (Q.isFunc(fn)) fn.apply(bind, args.slice(1));
         },
 
         //队列完成时,任务结果处理,用于complete事件参数
@@ -2099,7 +2119,7 @@
      * 函数排队执行
      * @param {Array} tasks 任务数组
      * @param {function} complete 队列完成处理函数
-     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,inject:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
+     * @param {object} ops 配置对象 eg: {tasks:[],count:10000,limitMode:1,auto:true,workerThread:1,timeout:0,injectIndex:1,injectCallback:'complete',exec:function(task,next){},process:function(task,next){},processResult:function(tasks){}}
      * @param {number} workerThread 同时执行的任务数量
      */
     function series(tasks, complete, ops, workerThread) {
@@ -2160,7 +2180,7 @@
 /*
 * Q.node.core.js 通用处理
 * author:devin87@qq.com
-* update:2020/07/22 20:47
+* update:2021/09/26 16:53
 */
 (function () {
     var fs = require('fs'),
@@ -2169,37 +2189,27 @@
 
         extend = Q.extend;
 
-    function mkdirSync(url, mode, callback) {
-        if (url == "..") return callback && callback();
+    function mkdirSync(url, mode) {
+        if (url == '..' || url == './') return;
 
-        url = path.normalize(url).replace(/\\/g, '/');
-        if (url != "/" && url.endsWith("/")) url = url.slice(0, -1);
-
-        var arr = url.split("/");
-
-        //处理 ./aaa
-        if (arr[0] === ".") arr.shift();
-
-        //处理 ../ddd/d
-        if (arr[0] == "..") arr.splice(0, 2, path.join(arr[0], arr[1]));
-
-        mode = mode || 493;  //0755
-
-        function inner(dir) {
-            //不存在就创建一个
-            if (!fs.existsSync(dir)) fs.mkdirSync(dir, mode);
-
-            if (arr.length) {
-                inner(path.join(dir, arr.shift()));
-            } else {
-                callback && callback();
-            }
+        var fullname = path.resolve(url), dirs = [];
+        while (!fs.existsSync(fullname)) {
+            dirs.push(fullname);
+            fullname = path.dirname(fullname);
         }
+        if (dirs.length <= 0) return;
 
-        arr.length && inner(arr.shift());
+        mode = mode || 511;  //0777
+
+        for (var i = dirs.length - 1; i >= 0; i--) {
+            fs.mkdirSync(dirs[i], mode);
+        }
     }
 
-    //确保文件夹存在
+    /**
+     * 递归创建文件夹，若文件夹存在，则忽略
+     * @param {string} dir 文件夹路径
+     */
     function mkdir(dir) {
         if (!fs.existsSync(dir)) mkdirSync(dir);
     }
@@ -2231,7 +2241,7 @@
 /*
 * Q.node.store.js 读写本地JSON文件
 * author:devin87@qq.com
-* update:2018/02/26 18:10
+* update:2020/09/11 17:27
 */
 (function () {
     var fs = require('fs'),
@@ -2247,26 +2257,37 @@
     function Storage(path) {
         this.path = path;
         this.data = {};
+        this.isOK = false;
     }
 
-    Q.factory(Storage);
-
-    Storage.extend({
+    Q.factory(Storage).extend({
         //初始化自定义存储数据
         init: function (cb) {
             var self = this;
-            if (!self.path || !fs.existsSync(self.path)) return fire(cb, undefined, new Error("File Not Found : " + self.path));
+            self.isOK = false;
+
+            if (!self.path) return fire(cb, undefined, new Error("File Path Not Found"));
+
+            if (!fs.existsSync(self.path)) {
+                self.isOK = true;
+                return fire(cb, undefined, undefined, self.data);
+            }
 
             fs.readFile(self.path, function (err, data) {
                 if (err) return fire(cb, undefined, err);
 
                 try {
-                    self.data = JSON.parse(data);
+                    var text = data + '';
+                    if (text) {
+                        var data = JSON.parse(text);
+                        if (data && isObject(data)) self.data = data;
+                    }
+
+                    self.isOK = true;
+                    return fire(cb, undefined, undefined, self.data);
                 } catch (e) {
                     return fire(cb, undefined, e);
                 }
-
-                fire(cb, undefined, undefined, self.data);
             });
         },
 
@@ -2291,9 +2312,15 @@
         },
         //保存自定义存储数据
         save: function (cb) {
-            mkdir(path.dirname(this.path));
+            if (!this.isOK) return fire(cb, undefined, new Error('Data Initialization Failed'));
 
-            fs.writeFile(this.path, JSON.stringify(this.data), 'utf-8', cb || function () { });
+            try {
+                mkdir(path.dirname(this.path));
+
+                fs.writeFile(this.path, JSON.stringify(this.data), 'utf-8', cb || function () { });
+            } catch (err) {
+                fire(cb, undefined, err);
+            }
         }
     });
 
@@ -2305,14 +2332,15 @@
 /*
 * Q.node.http.js http请求(支持https)
 * author:devin87@qq.com
-* update:2019/08/26 13:46
+* update:2021/09/22 16:18
 */
 (function () {
-    var URL = require('url'),
+    var Url = require('url'),
         querystring = require('querystring'),
         http = require('http'),
         https = require('https'),
         fs = require('fs'),
+        zlib = require('zlib'),
 
         extend = Q.extend,
         fire = Q.fire,
@@ -2327,7 +2355,7 @@
     };
 
     var config = {
-        timeout: 10000,
+        timeout: 20000,
         timeout_download: 600000
     };
 
@@ -2357,9 +2385,7 @@
      */
     function fire_http_complete(result, errCode, ops, res, err) {
         //避免某些情况（eg:超时）重复触发回调函数
-        if (!ops._status) ops._status = {};
-        if (ops._status.ended) return;
-        ops._status.ended = true;
+        if (ops._end) return;
 
         ops._end = Date.now();
         ops.time = ops._end - ops._begin;
@@ -2375,10 +2401,12 @@
     /**
      * 发送http请求
      * @param {string} url 请求地址
-     * @param {object} ops 请求配置项
+     * @param {object} ops 请求配置项 {queue,type,headers,timeout,dataType,data,opts,agent,retryCount,proxy,res,autoHeader,complete}
+     * @param {number} count 当前请求次数，默认为0
      */
-    function sendHttp(url, ops) {
+    function sendHttp(url, ops, count) {
         ops = ops || {};
+        count = +count || 0;
 
         //队列接口
         if (ops.queue) {
@@ -2413,69 +2441,113 @@
 
         if (config.headers) extend(headers, config.headers);
 
-        var uri = URL.parse(url);
+        var myURL = Url.parse(url);
 
         var options = {
-            hostname: uri.hostname,
-            path: uri.path,
-            port: uri.port,
+            hostname: myURL.hostname,
+            path: myURL.path,
+            port: myURL.port,
             method: method,
             headers: headers
         };
 
         if (ops.opts) extend(options, ops.opts);
+
         if (ops.agent) options.agent = ops.agent;
+        if (options.agent === true) options.agent = new web.Agent();
+
+        if (config.options) extend(options, config.options);
 
         ops.options = options;
 
-        var web = url.startsWith('https') ? https : http;
+        ops._end = undefined;
 
-        if (options.agent === true) options.agent = new web.Agent();
+        var web = url.startsWith('https') ? https : http,
+            req;
 
-        var req = web.request(options, function (res) {
+        var fire_timeout = function (err) {
+            if (ops._end) return;
+
+            if (req) req.abort();
+
+            var retryCount = +ops.retryCount || 0;
+            if (retryCount > 0 && ++count <= retryCount) return sendHttp(url, ops, count);
+
+            fire_http_complete(undefined, ErrorCode.Timedout, ops, undefined, err);
+        };
+
+        req = web.request(options, function (res) {
             var buffers = [];
 
             var is_http_proxy = Q.def(ops.proxy, ops.res ? true : false),
                 is_auto_header = Q.def(ops.autoHeader, is_http_proxy ? true : false),
                 _res = ops.res;
 
-            if (_res) {
-                if (is_auto_header) {
-                    Object.forEach(res.headers, function (k, v) {
-                        if (res.headers[k] != undefined) _res.setHeader(k, v);
-                    });
-                } else {
-                    var content_type = res.headers['content-type'] || 'text/html';
-                    if (content_type.indexOf('charset') == -1) content_type += (content_type.endsWith(';') ? '' : ';') + 'charset=utf-8';
-                    _res.setHeader('Content-Type', content_type);
+            if (_res && !res._ended) {
+                try {
+                    if (is_auto_header) {
+                        Object.forEach(res.headers, function (k, v) {
+                            if (res.headers[k] != undefined) _res.setHeader(k, v);
+                        });
+                    } else {
+                        var content_type = res.headers['content-type'] || 'text/html';
+                        if (content_type.indexOf('charset') == -1) content_type += (content_type.endsWith(';') ? '' : ';') + 'charset=utf-8';
+                        _res.setHeader('Content-Type', content_type);
+                    }
+                } catch (err) {
+                    throw new Error(err.message + '\n' + url);
                 }
             }
+
+            var encoding = res.headers['content-encoding'];
 
             //代理请求
             if (is_http_proxy) {
                 res.pipe(_res);
             } else {
-                res.setEncoding(ops.encoding || 'utf8');
-
                 res.on('data', function (chunk) {
                     buffers.push(chunk);
                 });
             }
 
             res.on('end', function () {
-                var text = buffers.join(''), data;
-                ops.response = text;
-                if (!is_json) return fire_http_complete(text, undefined, ops, res);
+                var next = function (err, text) {
+                    if (err) return fire_http_complete(undefined, ErrorCode.HttpError, ops, res, err);
 
-                try {
-                    data = JSON.parse(text);
-                } catch (err) {
-                    return fire_http_complete(undefined, ErrorCode.JSONError, ops, res, err);
+                    ops.response = text;
+                    if (!is_json) return fire_http_complete(text, undefined, ops, res);
+
+                    var data;
+
+                    try {
+                        data = JSON.parse(text);
+                    } catch (err) {
+                        return fire_http_complete(undefined, ErrorCode.JSONError, ops, res, err);
+                    }
+
+                    fire_http_complete(data, undefined, ops, res);
+                };
+
+                var buffer = Buffer.concat(buffers);
+
+                switch (encoding) {
+                    case 'gzip': return zlib.gunzip(buffer, next);
+                    case 'deflate': return zlib.inflate(buffer, next);
+                    default: return next(undefined, buffer.toString('utf8'));
                 }
-
-                fire_http_complete(data, undefined, ops, res);
             });
-        }).on('error', ops.error || config.error || function (err) {
+        }).on('timeout', function () {
+            fire_timeout(new Error('Socket Timedout'));
+        }).on('error', function (err) {
+            //避免重复触发(超时后调用 req.abort 会触发此处 error 事件且 err.code 为 ECONNRESET) 
+            if (ops._end) return;
+
+            if (err.code === 'ECONNRESET' || err.code === 'EPROTO') {
+                var retryCount = ops.retryCount != undefined ? +ops.retryCount || 0 : 1;
+                if (++count <= retryCount) return sendHttp(url, ops, count);
+            }
+
+            fire(ops.error || config.error, this, err);
             fire_http_complete(undefined, ErrorCode.HttpError, ops, undefined, err);
         });
 
@@ -2484,12 +2556,10 @@
         if (timeout && timeout != -1) {
             // req.setTimeout在某些环境需要双倍时间才触发超时回调
             // req.setTimeout(timeout, function () {
-            //     req.abort();
-            //     fire_http_complete(undefined, ErrorCode.Timedout, ops);
+            //     fire_timeout(new Error('HTTP Timedout'));
             // });
             setTimeout(function () {
-                req.abort();
-                fire_http_complete(undefined, ErrorCode.Timedout, ops);
+                fire_timeout(new Error('HTTP Timedout'));
             }, timeout);
         }
 
@@ -2575,51 +2645,78 @@
      * @param {string} dest 保存路径
      * @param {function} cb 回调函数(data, errCode)
      * @param {object} ops 其它配置项 { timeout: 600000, progress: function(total,loaded){} }
+     * @param {number} count 当前请求次数，默认为0
      */
-    function downloadFile(url, dest, cb, ops) {
+    function downloadFile(url, dest, cb, ops, count) {
         ops = ops || {};
+        count = +count || 0;
 
-        var method = ops.type || ops.method || 'GET',
-            headers = ops.headers || {},
+        if (isObject(cb)) {
+            ops = cb;
+            cb = undefined;
+        } else {
+            ops.complete = cb;
+        }
+
+        try {
+            //格式化url
+            url = encodeURI(decodeURI(url));
+        } catch (err) { }
+
+        var headers = ops.headers || {},
             timeout = ops.timeout || config.timeout_download;
 
         if (config.headers) extend(headers, config.headers);
 
-        var uri = URL.parse(url);
+        var myURL = Url.parse(url);
 
         var options = {
-            hostname: uri.hostname,
-            path: uri.path,
-            port: uri.port,
+            hostname: myURL.hostname,
+            path: myURL.path,
+            port: myURL.port,
             headers: headers
         };
 
         if (ops.opts) extend(options, ops.opts);
+
         if (ops.agent) options.agent = ops.agent;
+        if (options.agent === true) options.agent = new web.Agent();
+
+        if (config.options) extend(options, config.options);
 
         ops.options = options;
 
         var web = url.startsWith('https') ? https : http,
             total = 0,
-            loaded = 0;
+            loaded = 0,
+            req;
 
-        if (options.agent === true) options.agent = new web.Agent();
+        var fire_timeout = function (err) {
+            if (ops._end) return;
 
-        var req = web.get(options, function (res) {
-            if (res.statusCode !== 200) return fire(cb, undefined, undefined, ErrorCode.HttpError, ops, res, 'Http code: ' + res.statusCode);
+            if (req) req.abort();
+
+            var retryCount = +ops.retryCount || 0;
+            if (retryCount > 0 && ++count <= retryCount) return sendHttp(url, ops, count);
+
+            fire_http_complete(undefined, ErrorCode.Timedout, ops, undefined, err);
+        };
+
+        req = web.get(options, function (res) {
+            if (res.statusCode !== 200) return fire_http_complete(undefined, ErrorCode.HttpError, ops, res, new Error('Http code: ' + res.statusCode));
 
             var file = fs.createWriteStream(dest);
             res.pipe(file);
 
             file.on('finish', function () {
                 file.close(function () {
-                    fire(cb, undefined, undefined, undefined, ops, res);
+                    fire_http_complete(undefined, undefined, ops, res);
                 });
             });
 
             file.on('error', function (err) {
                 if (fs.existsSync(dest)) fs.unlinkSync(dest);
-                fire(cb, undefined, undefined, ErrorCode.FileError, ops, res, err);
+                fire_http_complete(undefined, ErrorCode.FileError, ops, res, err);
             });
 
             if (ops.progress) {
@@ -2633,33 +2730,122 @@
                     fire(ops.progress, res, total, loaded);
                 });
             }
+        }).on('timeout', function () {
+            fire_timeout(new Error('Socket Timedout'));
+        }).on('error', function (err) {
+            //避免重复触发(超时后调用 req.abort 会触发此处 error 事件且 err.code 为 ECONNRESET) 
+            if (ops._end) return;
+
+            if (fs.existsSync(dest)) fs.unlinkSync(dest);
+
+            if (err.code === 'ECONNRESET' || err.code === 'EPROTO') {
+                var retryCount = ops.retryCount != undefined ? +ops.retryCount || 0 : 1;
+                if (++count <= retryCount) return downloadFile(url, dest, cb, ops, count);
+            }
+
+            fire(ops.error || config.error, this, err);
+            fire_http_complete(undefined, ErrorCode.HttpError, ops, undefined, err);
         });
 
-        req.on('error', function (err) {
-            if (fs.existsSync(dest)) fs.unlinkSync(dest);
-            fire(cb, undefined, undefined, ErrorCode.HttpError, ops, undefined, err);
-        });
+        if (fire_http_beforeSend(req, ops) === false) return;
 
         if (timeout && timeout != -1) {
-            //req.setTimeout(timeout, function () {
-            //    fire(cb, undefined, undefined, ErrorCode.Timedout, ops);
-            //});
+            // req.setTimeout(timeout, function () {
+            //     fire_timeout(new Error('HTTP Timedout'));
+            // });
             setTimeout(function () {
-                //req.abort();
-                fire(cb, undefined, undefined, ErrorCode.Timedout, ops);
+                fire_timeout(new Error('HTTP Timedout'));
             }, timeout);
         }
 
         return req;
     }
 
+    /**
+     * 将 http 请求转为 curl命令
+     * @param {string} url 
+     * @param {object} ops 请求配置项 {type,headers,timeout,data,ua,auth,cookie,keepalive,enableRedirect,maxRedirects,iface,proxy}
+     * @returns {string}
+     */
+    function http2curl(url, ops) {
+        ops = ops || {};
+
+        var method = ops.type || ops.method || 'GET',
+            headers = ops.headers || {},
+            timeout = ops.timeout || config.timeout,
+
+            is_http_get = method == 'GET',
+            is_http_post = method == 'POST',
+
+            data = ops.data,
+            post_data = '';
+
+        if (is_http_post) {
+            if (data) post_data = typeof data == 'string' ? data : querystring.stringify(data);
+        } else {
+            if (data) url = Q.join(url, data);
+        }
+
+        if (config.headers) extend(headers, config.headers);
+
+        var curl = ['curl -X ' + method];
+
+        //启用服务器重定向
+        if (ops.enableRedirect && is_http_get) {
+            curl.push('-L');
+
+            //最大重定向次数
+            var maxRedirects = +ops.maxRedirects || 3;
+            curl.push('--max-redirs ' + maxRedirects);
+        }
+
+        //跳过 ssl 检测
+        if (ops.skipSSL) curl.push('-k');
+
+        var dataAuth = ops.auth;
+        if (dataAuth && dataAuth.user) curl.push('--user ' + dataAuth.user.replace(/"/g, '\\"') + ':' + (dataAuth.passwd || '').replace(/"/g, '\\"'));
+
+        if (is_http_post) curl.push('-d "' + post_data + '"');
+        else curl.push('"' + url + '"');
+
+        //设置 UserAgent eg: curl -A 'myua' url
+        if (ops.ua) curl.push('-A "' + ops.ua.replace(/"/g, '\\"') + '"');
+
+        //设置 Cookie eg: curl -b 'a=1;b=2' url
+        if (ops.cookie && typeof ops.cookie == 'string') curl.push('-b "' + ops.cookie.replace(/"/g, '\\"') + '"');
+
+        //设置网卡
+        if (ops.iface) curl.push('--interface "' + ops.iface + '"');
+
+        //设置代理
+        if (ops.proxy) curl.push('--proxy "' + ops.proxy + '"');
+
+        //静默输出（不显示进度信息）
+        if (ops.silent !== false) curl.push('--silent');
+
+        if (timeout) curl.push('--max-time ' + Math.round(timeout / 1000));
+        if (ops.keepalive === false) curl.push('--no-keepalive');
+
+        //curl 其它参数，多个之间用空格分开
+        if (ops.curlArgs) curl.push(ops.curlArgs);
+
+        Object.forEach(headers, function (k, v) {
+            curl.push('-H "' + k + ':' + v + '"');
+        });
+
+        return curl.join(' ');
+    }
+
     extend(Q, {
         httpSetup: setup,
+
         http: sendHttp,
         getHttp: getHttp,
         postHttp: postHttp,
         getJSON: getJSON,
         postJSON: postJSON,
-        downloadFile: downloadFile
+
+        downloadFile: downloadFile,
+        http2curl: http2curl
     });
 })();
